@@ -147,9 +147,11 @@ const StudentCard: React.FC<StudentCardProps> = ({ student, status, onStatusChan
 const LoginScreen = ({ onLogin }: { onLogin: () => void }) => {
   const { instance } = useMsal();
   const [loading, setLoading] = useState(false);
+  const [loginError, setLoginError] = useState<string | null>(null);
 
   const handleMicrosoftLogin = () => {
     setLoading(true);
+    setLoginError(null);
 
     if (isMsalConfigured) {
       // Real O365 Authentication
@@ -162,7 +164,20 @@ const LoginScreen = ({ onLogin }: { onLogin: () => void }) => {
         .catch((e) => {
             console.error("Login failed", e);
             setLoading(false);
-            alert("Authentication failed. Please check console or try simulation.");
+            
+            // Extract detailed error
+            let errorMessage = "Authentication failed.";
+            if (e.errorCode) {
+                 // AADSTS... error codes are common
+                 errorMessage = `Azure Error: ${e.errorCode}`;
+                 if (e.message && e.message.includes("AADSTS50011")) {
+                     errorMessage += "\n(Redirect URI mismatch. Check Azure Portal settings.)";
+                 }
+            } else if (e.message) {
+                 errorMessage = e.message;
+            }
+            
+            setLoginError(errorMessage);
         });
     } else {
       // Fallback Simulation (If no Azure keys configured)
@@ -189,6 +204,13 @@ const LoginScreen = ({ onLogin }: { onLogin: () => void }) => {
              <h1 className="text-2xl font-bold mb-2">Westbrook Academy</h1>
              <p className="text-blue-200 text-sm">Staff & Transport Portal</p>
            </div>
+
+           {loginError && (
+             <div className="mb-4 bg-red-500/20 border border-red-500/50 p-3 rounded-xl text-xs text-red-100 text-left">
+                <p className="font-bold flex items-center gap-1"><AlertTriangle size={12} /> Login Failed</p>
+                <p className="mt-1 opacity-90 break-words">{loginError}</p>
+             </div>
+           )}
 
            <button
              onClick={handleMicrosoftLogin}
