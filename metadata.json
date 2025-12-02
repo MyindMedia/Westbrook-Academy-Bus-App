@@ -1,0 +1,8 @@
+{
+  "name": "Westbrook Academy Bus Tracker",
+  "description": "Mobile-first student transportation tracking system with PowerSchool integration and MS Teams reporting.",
+  "requestFramePermissions": [
+    "camera",
+    "geolocation"
+  ]
+}
