@@ -30,6 +30,7 @@ export interface Bus {
   name: string; // e.g., "Bus A"
   driverName: string;
   endpointAddress: string; // The remote location (High School, Middle School, etc.)
+  endpointLocation: { lat: number; lng: number }; // Coordinate for map
 }
 
 export interface AttendanceLog {

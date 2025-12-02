@@ -5,23 +5,27 @@ export const BUSES: Bus[] = [
     id: "BUS-A", 
     name: "Bus A - High School", 
     driverName: "John Smith",
-    endpointAddress: "1700 W 46th St, Los Angeles, CA 90062"
+    endpointAddress: "1700 W 46th St, Los Angeles, CA 90062",
+    endpointLocation: { lat: 34.003500, lng: -118.306000 }
   },
   { 
     id: "BUS-B", 
     name: "Bus B - Middle School", 
     driverName: "Jane Doe",
-    endpointAddress: "1700 W 46th St, Los Angeles, CA 90062"
+    endpointAddress: "1700 W 46th St, Los Angeles, CA 90062",
+    endpointLocation: { lat: 34.003500, lng: -118.306000 }
   },
   { 
     id: "BUS-C", 
     name: "Bus C - Bell High", 
     driverName: "Robert Johnson",
-    endpointAddress: "4206 Gage Ave, Bell, CA 90201"
+    endpointAddress: "4206 Gage Ave, Bell, CA 90201",
+    endpointLocation: { lat: 33.973800, lng: -118.196000 }
   },
 ];
 
 export const SCHOOL_ADDRESS = "2340 Firestone Blvd, South Gate, CA 90280";
+export const SCHOOL_LOCATION = { lat: 33.947236, lng: -118.215324 };
 
 // Placeholder images using picsum
 export const STUDENTS: Student[] = [

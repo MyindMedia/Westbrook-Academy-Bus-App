@@ -1,10 +1,10 @@
-
 import React, { useEffect, useState } from 'react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { BUSES, MOCK_TRIPS, MOCK_INCIDENTS, getStudentById } from '../services/mockData';
 import { CompletedTrip, Incident } from '../types';
 import { PowerSchoolService } from '../services/powerSchool';
 import { LiveTrackingService, LiveTripState } from '../services/liveTracking';
+import MapView from './MapView';
 import { MapPin, Bus as BusIcon, AlertTriangle, Clock, Calendar, ChevronRight, X, User, RefreshCw, Check, Link, Database, Radio } from 'lucide-react';
 
 const Dashboard: React.FC = () => {
@@ -60,26 +60,6 @@ const Dashboard: React.FC = () => {
     };
   }, []);
 
-  // Simulate moving buses on a "Map" IF no live data is present
-  const [simulatedLocations, setSimulatedLocations] = useState<Record<string, number>>({
-    'BUS-A': 10,
-    'BUS-B': 40,
-    'BUS-C': 70
-  });
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setSimulatedLocations(prev => {
-        const next = { ...prev };
-        Object.keys(next).forEach(key => {
-          next[key] = (next[key] + 2) % 100;
-        });
-        return next;
-      });
-    }, 2000);
-    return () => clearInterval(interval);
-  }, []);
-
   return (
     <div className="p-6 bg-gray-50 min-h-screen">
       <div className="flex justify-between items-center mb-6">
@@ -106,7 +86,7 @@ const Dashboard: React.FC = () => {
             <div>
                 <h3 className="text-lg font-semibold mb-2 text-gray-700 flex items-center gap-2">
                     <Database size={20} className="text-westbrook-blue" />
-                    Data Integration
+                    Student Database
                 </h3>
                 <p className="text-sm text-gray-500 mb-6">Manage data sync between PowerSchool SIS and Westbrook Transportation.</p>
             </div>
@@ -143,73 +123,26 @@ const Dashboard: React.FC = () => {
                     ) : (
                         <>
                            <RefreshCw size={18} />
-                           Sync Students
+                           Refresh Data
                         </>
                     )}
                  </button>
             </div>
         </div>
 
-        {/* Live Map Simulation Card */}
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200 lg:col-span-2 flex flex-col">
-          <h3 className="text-lg font-semibold mb-4 text-gray-700 flex items-center justify-between">
-            <span>Live Fleet Tracking</span>
-            <span className="text-xs font-normal text-green-600 bg-green-100 px-2 py-1 rounded-full animate-pulse flex items-center gap-1">
-                <Radio size={12} /> Real-Time
-            </span>
-          </h3>
-          <div className="h-48 bg-gray-100 rounded-xl relative overflow-hidden border border-gray-200 flex-1">
-             {/* Fake Map Grid */}
-             <div className="absolute inset-0" style={{
-                 backgroundImage: 'radial-gradient(#cbd5e1 1px, transparent 1px)',
-                 backgroundSize: '20px 20px'
-             }}></div>
-             
-             {/* Roads */}
-             <div className="absolute top-1/2 left-0 w-full h-4 bg-gray-300 transform -translate-y-1/2"></div>
-             <div className="absolute top-0 left-1/3 w-4 h-full bg-gray-300"></div>
-
-             {/* Buses (Mixed Live and Simulated) */}
-             {BUSES.map((bus, idx) => {
-                 const liveData = activeTrips[bus.id];
-                 const isLive = !!liveData;
-                 // Use a fixed visual position override if live to indicate "Real" data, 
-                 // otherwise fall back to simulated animation
-                 const positionLeft = isLive ? '60%' : (idx === 0 ? `${simulatedLocations[bus.id]}%` : '33%');
-                 const positionTop = isLive ? '40%' : (idx === 0 ? '50%' : `${simulatedLocations[bus.id]}%`);
-                 
-                 return (
-                     <div 
-                        key={bus.id}
-                        className={`absolute transition-all duration-[2000ms] ease-linear flex flex-col items-center z-10 ${isLive ? 'z-20 scale-110' : 'opacity-60'}`}
-                        style={{
-                            left: positionLeft,
-                            top: positionTop,
-                            transform: 'translate(-50%, -50%)'
-                        }}
-                     >
-                        <div className={`p-1.5 rounded-full shadow-lg border-2 border-white ${isLive ? 'bg-green-600 animate-bounce' : 'bg-westbrook-orange'}`}>
-                            <BusIcon size={14} className="text-white" />
-                        </div>
-                        <span className={`text-[10px] font-bold mt-1 bg-white/90 px-1 rounded shadow-sm ${isLive ? 'text-green-700' : 'text-gray-500'}`}>
-                            {bus.id} {isLive && '• LIVE'}
-                        </span>
-                     </div>
-                 );
-             })}
-
-             {/* School Pin */}
-             <div className="absolute top-1/2 left-1/3 transform -translate-x-1/2 -translate-y-1/2 z-0">
-                 <div className="flex flex-col items-center">
-                    <MapPin size={24} className="text-westbrook-blue fill-current" />
-                    <span className="text-[10px] font-bold text-gray-600">Academy</span>
-                 </div>
-             </div>
+        {/* Live Map Card */}
+        <div className="bg-white p-0 rounded-2xl shadow-sm border border-gray-200 lg:col-span-2 flex flex-col overflow-hidden relative">
+          <div className="absolute top-4 left-4 z-10 bg-white/90 backdrop-blur px-3 py-1 rounded-full shadow-sm flex items-center gap-2">
+             <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+             <span className="text-xs font-bold text-gray-700">Live Map View</span>
+          </div>
+          <div className="h-[300px] w-full bg-gray-100 relative">
+             <MapView activeTrips={activeTrips} />
           </div>
         </div>
       </div>
       
-      {/* Active Trips Section (New) */}
+      {/* Active Trips Section */}
       {Object.keys(activeTrips).length > 0 && (
           <div className="mb-8">
              <h3 className="text-lg font-semibold text-gray-700 mb-3">Active Trips</h3>
