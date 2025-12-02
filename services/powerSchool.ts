@@ -1,11 +1,11 @@
 
 import { Student } from '../types';
-import { STUDENTS, searchGlobalStudents } from './mockData';
 
 export class PowerSchoolService {
   private static instance: PowerSchoolService;
   private isConnected: boolean = false;
   private lastSync: Date | null = null;
+  private cachedStudents: Student[] = [];
 
   private constructor() {}
 
@@ -16,27 +16,14 @@ export class PowerSchoolService {
     return PowerSchoolService.instance;
   }
 
-  // This is now handled by the backend /connect route, but we keep this to check status
-  public async checkConnection(): Promise<boolean> {
-     try {
-         // Attempt to fetch students as a "ping"
-         // In a real app, we'd have a /status endpoint
-         const res = await fetch('/api/powerschool/students');
-         if (res.status === 200) {
-             this.isConnected = true;
-             return true;
-         }
-         return false;
-     } catch (e) {
-         return false;
-     }
+  public getCachedStudents(): Student[] {
+      return this.cachedStudents;
   }
 
   public async syncStudents(): Promise<{ added: number, updated: number, students: Student[] }> {
-    console.log("Starting Sync...");
+    console.log("Starting Sync with PowerSchool Backend...");
     
     try {
-        // Try Real Backend First
         const response = await fetch('/api/powerschool/students');
         
         if (response.ok) {
@@ -45,44 +32,48 @@ export class PowerSchoolService {
             
             this.isConnected = true;
             this.lastSync = new Date();
+            this.cachedStudents = realData;
             
             return {
                 added: realData.length,
                 updated: 0,
-                students: realData // In a real app, you'd merge this with local state
+                students: realData 
             };
         } else {
-            throw new Error("Backend returned error");
+            console.error("Backend returned error:", response.statusText);
+            throw new Error("Backend connection failed");
         }
     } catch (e) {
-        console.warn("Backend Sync Failed (Server likely offline). Falling back to Mock Data.", e);
-        
-        // Fallback to Mock Data simulation
-        await new Promise(resolve => setTimeout(resolve, 1500));
-        this.isConnected = true; // Pretend it worked for demo
-        this.lastSync = new Date();
-        
+        console.error("PowerSchool Sync Failed:", e);
+        // STRICT: Return empty array. No mock data.
+        this.isConnected = false;
         return {
             added: 0,
             updated: 0,
-            students: STUDENTS
+            students: []
         };
     }
   }
 
   public async searchStudents(query: string): Promise<Student[]> {
-      // 1. Try Local Mock DB first for speed (Mock Data)
-      const localResults = searchGlobalStudents(query);
-      if (localResults.length > 0) return localResults;
+      // 1. Search locally in cached data first
+      if (this.cachedStudents.length > 0) {
+          const lowerQ = query.toLowerCase();
+          const localResults = this.cachedStudents.filter(s => 
+            s.name.toLowerCase().includes(lowerQ) || 
+            s.id.toLowerCase().includes(lowerQ)
+          );
+          if (localResults.length > 0) return localResults;
+      }
 
-      // 2. If nothing locally, try real backend
+      // 2. If no local results or cache empty, try backend search
       try {
           const response = await fetch(`/api/powerschool/students?search=${encodeURIComponent(query)}`);
           if (response.ok) {
               return await response.json();
           }
       } catch (e) {
-          // ignore
+          console.error("Search failed", e);
       }
       
       return [];

@@ -1,13 +1,13 @@
 
 import React, { useEffect, useState } from 'react';
-import { BUSES, MOCK_TRIPS, MOCK_INCIDENTS, getStudentById } from '../services/mockData';
-import { CompletedTrip, Incident } from '../types';
+import { MOCK_TRIPS, MOCK_INCIDENTS } from '../services/mockData';
+import { CompletedTrip, Student } from '../types';
 import { PowerSchoolService } from '../services/powerSchool';
 import { LiveTrackingService, LiveTripState } from '../services/liveTracking';
 import MapView from './MapView';
 import UserAvatar from './UserAvatar';
 import PowerSchoolHelp from './PowerSchoolHelp';
-import { Clock, AlertTriangle, X, User, RefreshCw, Check, Database, Radio, ArrowUpRight, HelpCircle } from 'lucide-react';
+import { Clock, AlertTriangle, X, User, RefreshCw, Check, Database, Radio, ArrowUpRight, HelpCircle, Search, ChevronDown, List } from 'lucide-react';
 
 interface DashboardProps {
     isDevMode?: boolean;
@@ -22,6 +22,11 @@ const Dashboard: React.FC<DashboardProps> = ({ isDevMode = false }) => {
   const [syncStatus, setSyncStatus] = useState<'IDLE' | 'SUCCESS' | 'ERROR'>('IDLE');
   const [showPSHelp, setShowPSHelp] = useState(false);
   
+  // Student Database Dropdown State
+  const [allStudents, setAllStudents] = useState<Student[]>([]);
+  const [dbSearch, setDbSearch] = useState("");
+  const [isDbOpen, setIsDbOpen] = useState(false);
+  
   // LIVE TRACKING STATE
   const [activeTrips, setActiveTrips] = useState<Record<string, LiveTripState>>({});
 
@@ -32,7 +37,8 @@ const Dashboard: React.FC<DashboardProps> = ({ isDevMode = false }) => {
     setSyncing(true);
     setSyncStatus('IDLE');
     try {
-        await psService.syncStudents();
+        const result = await psService.syncStudents();
+        setAllStudents(result.students);
         setLastSync(new Date());
         setSyncStatus('SUCCESS');
         setTimeout(() => setSyncStatus('IDLE'), 3000);
@@ -42,6 +48,18 @@ const Dashboard: React.FC<DashboardProps> = ({ isDevMode = false }) => {
         setSyncing(false);
     }
   };
+
+  // Initial Data Load
+  useEffect(() => {
+      // Load cached students if available, or fetch
+      const cached = psService.getCachedStudents();
+      if (cached.length > 0) {
+          setAllStudents(cached);
+          setLastSync(psService.getLastSyncTime());
+      } else {
+          handleSync();
+      }
+  }, []);
 
   // Poll for Live Data
   useEffect(() => {
@@ -67,6 +85,12 @@ const Dashboard: React.FC<DashboardProps> = ({ isDevMode = false }) => {
     };
   }, []);
 
+  // Filter students for the dropdown
+  const filteredStudents = allStudents.filter(s => 
+      s.name.toLowerCase().includes(dbSearch.toLowerCase()) || 
+      s.id.toLowerCase().includes(dbSearch.toLowerCase())
+  );
+
   return (
     <div className="p-8 bg-gray-50/50 min-h-screen">
       <div className="flex justify-between items-start mb-8">
@@ -81,10 +105,10 @@ const Dashboard: React.FC<DashboardProps> = ({ isDevMode = false }) => {
             <div className="flex flex-col items-end mr-2">
                 <span className="text-xs font-bold text-gray-700">PowerSchool SIS</span>
                 <span className="text-[10px] text-gray-400 font-mono">
-                    {lastSync ? `Last Sync: ${lastSync.toLocaleTimeString()}` : 'System Connected'}
+                    {lastSync ? `Last Sync: ${lastSync.toLocaleTimeString()}` : 'Connecting...'}
                 </span>
             </div>
-            <div className={`w-3 h-3 rounded-full ${syncing ? 'bg-yellow-400 animate-pulse' : 'bg-green-500 shadow-[0_0_10px_rgba(34,197,94,0.4)]'}`}></div>
+            <div className={`w-3 h-3 rounded-full ${syncing ? 'bg-yellow-400 animate-pulse' : lastSync ? 'bg-green-500 shadow-[0_0_10px_rgba(34,197,94,0.4)]' : 'bg-red-500'}`}></div>
             </div>
 
             {/* Admin Avatar */}
@@ -95,38 +119,27 @@ const Dashboard: React.FC<DashboardProps> = ({ isDevMode = false }) => {
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-8">
         
         {/* PowerSchool Sync Card */}
-        <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 lg:col-span-1 flex flex-col justify-between relative overflow-hidden group">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-blue-50 to-transparent rounded-bl-full -mr-10 -mt-10 opacity-60 pointer-events-none transition-transform group-hover:scale-110"></div>
-            
-            <div className="flex justify-between items-start">
+        <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 lg:col-span-1 flex flex-col relative overflow-hidden">
+            <div className="flex justify-between items-start mb-4">
                 <div>
                     <div className="w-10 h-10 bg-blue-50 text-westbrook-blue rounded-xl flex items-center justify-center mb-4">
-                        <Database size={20} />
+                        <RefreshCw size={20} />
                     </div>
                     <h3 className="text-lg font-bold text-gray-800 mb-1">
-                        Student Database
+                        Data Sync
                     </h3>
-                    <p className="text-xs text-gray-500 mb-6 leading-relaxed">Manage data sync between PowerSchool SIS and local fleet manifest.</p>
+                    <p className="text-xs text-gray-500 leading-relaxed">Refresh student manifest from SIS.</p>
                 </div>
                 <button onClick={() => setShowPSHelp(true)} className="p-2 bg-gray-50 text-gray-400 rounded-full hover:bg-blue-50 hover:text-blue-500 transition-colors">
                     <HelpCircle size={18} />
                 </button>
             </div>
-
-            <div className="space-y-3 relative z-10">
-                 <div className="flex justify-between items-center text-sm border-b border-gray-50 pb-2">
-                     <span className="text-gray-500">API Status</span>
-                     <span className="text-green-600 font-bold flex items-center gap-1.5"><div className="w-1.5 h-1.5 rounded-full bg-green-500"></div> Active</span>
-                 </div>
-                 <div className="flex justify-between items-center text-sm border-b border-gray-50 pb-2">
-                     <span className="text-gray-500">Version</span>
-                     <span className="text-gray-800 font-mono text-xs">v2.4.0-prod</span>
-                 </div>
-                 
+             
+             <div className="mt-auto">
                  <button 
                     onClick={handleSync}
                     disabled={syncing}
-                    className={`w-full mt-2 py-3.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all shadow-sm ${
+                    className={`w-full py-3.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all shadow-sm ${
                         syncStatus === 'SUCCESS' 
                         ? 'bg-green-50 text-green-700 border border-green-200' 
                         : 'bg-gray-900 text-white hover:bg-gray-800 hover:shadow-md'
@@ -135,25 +148,86 @@ const Dashboard: React.FC<DashboardProps> = ({ isDevMode = false }) => {
                     {syncing ? (
                         <>
                           <RefreshCw size={16} className="animate-spin" />
-                          Syncing Data...
+                          Syncing...
                         </>
                     ) : syncStatus === 'SUCCESS' ? (
                         <>
                            <Check size={16} />
-                           Sync Complete
+                           Synced
                         </>
                     ) : (
                         <>
                            <RefreshCw size={16} />
-                           Refresh Data
+                           Sync Now
                         </>
                     )}
                  </button>
             </div>
         </div>
 
+        {/* Database Dropdown Card (New) */}
+        <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 lg:col-span-1 flex flex-col">
+            <div className="flex justify-between items-start mb-4">
+                <div className="w-10 h-10 bg-purple-50 text-purple-600 rounded-xl flex items-center justify-center mb-4">
+                    <Database size={20} />
+                </div>
+                <span className="bg-purple-100 text-purple-700 text-[10px] font-bold px-2 py-1 rounded">
+                    {allStudents.length} Records
+                </span>
+            </div>
+            <h3 className="text-lg font-bold text-gray-800 mb-1">District Database</h3>
+            <p className="text-xs text-gray-500 mb-4">View entire PowerSchool roster.</p>
+            
+            <div className="relative mt-auto">
+                <div 
+                    className="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 flex items-center justify-between cursor-pointer hover:bg-gray-100 transition-colors"
+                    onClick={() => setIsDbOpen(!isDbOpen)}
+                >
+                    <span className="text-sm font-medium text-gray-600">Select Student...</span>
+                    <ChevronDown size={16} className={`text-gray-400 transition-transform ${isDbOpen ? 'rotate-180' : ''}`} />
+                </div>
+
+                {isDbOpen && (
+                    <div className="absolute top-full left-0 w-full mt-2 bg-white rounded-xl shadow-xl border border-gray-100 z-50 overflow-hidden flex flex-col max-h-[300px] animate-in slide-in-from-top-2">
+                        <div className="p-2 border-b border-gray-100">
+                             <div className="flex items-center gap-2 bg-gray-50 px-2 py-1.5 rounded-lg">
+                                <Search size={14} className="text-gray-400" />
+                                <input 
+                                    type="text" 
+                                    autoFocus
+                                    className="bg-transparent text-sm w-full outline-none placeholder-gray-400"
+                                    placeholder="Search name or ID..."
+                                    value={dbSearch}
+                                    onChange={(e) => setDbSearch(e.target.value)}
+                                />
+                             </div>
+                        </div>
+                        <div className="overflow-y-auto flex-1 p-1 custom-scrollbar">
+                            {filteredStudents.length === 0 ? (
+                                <div className="p-4 text-center text-xs text-gray-400">
+                                    {allStudents.length === 0 ? "No data. Click 'Sync Now'." : "No matching students."}
+                                </div>
+                            ) : (
+                                filteredStudents.map(student => (
+                                    <div key={student.id} className="p-2 hover:bg-blue-50 rounded-lg flex items-center gap-3 cursor-default">
+                                         <img src={student.photoUrl} className="w-8 h-8 rounded-full bg-gray-100 object-cover" alt="" />
+                                         <div className="overflow-hidden">
+                                             <p className="text-sm font-bold text-gray-800 truncate">{student.name}</p>
+                                             <p className="text-[10px] text-gray-500">
+                                                ID: {student.id} • Grade {student.grade}
+                                             </p>
+                                         </div>
+                                    </div>
+                                ))
+                            )}
+                        </div>
+                    </div>
+                )}
+            </div>
+        </div>
+
         {/* Live Map Card */}
-        <div className="bg-white p-0 rounded-3xl shadow-sm border border-gray-200 lg:col-span-3 flex flex-col overflow-hidden relative min-h-[400px]">
+        <div className="bg-white p-0 rounded-3xl shadow-sm border border-gray-200 lg:col-span-2 flex flex-col overflow-hidden relative min-h-[300px]">
           <div className="absolute top-5 left-5 z-[500] bg-white/90 backdrop-blur-md px-4 py-2 rounded-full shadow-sm border border-white/50 flex items-center gap-2">
              <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.6)]"></div>
              <span className="text-xs font-bold text-gray-700 uppercase tracking-wide">Live Fleet View</span>
@@ -291,13 +365,6 @@ const Dashboard: React.FC<DashboardProps> = ({ isDevMode = false }) => {
                      </div>
                      <h4 className="font-bold text-gray-800 mb-1">{inc.type} • {inc.busId}</h4>
                      <p className="text-sm text-gray-600 leading-relaxed mb-3">"{inc.description}"</p>
-                     
-                     <div className="flex items-center gap-2">
-                         <div className="w-5 h-5 rounded-full bg-gray-200 flex items-center justify-center text-[10px] font-bold text-gray-500">
-                             {inc.driverName.charAt(0)}
-                         </div>
-                         <p className="text-xs text-gray-400">Reported by {inc.driverName}</p>
-                     </div>
                    </li>
                  ))}
                </ul>
@@ -348,42 +415,6 @@ const Dashboard: React.FC<DashboardProps> = ({ isDevMode = false }) => {
                        <span className="text-sm font-medium text-red-600 opacity-70">Reported</span>
                     </div>
                   </div>
-               </div>
-
-               {/* Student Manifest Table */}
-               <h3 className="font-bold text-gray-900 mb-4 text-sm uppercase tracking-wider flex items-center gap-2">
-                   <User size={16} /> Student Manifest
-               </h3>
-               <div className="border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
-                 <table className="w-full text-left text-sm">
-                    <thead className="bg-gray-50 text-gray-500">
-                      <tr>
-                        <th className="px-6 py-3 font-medium">Student Name</th>
-                        <th className="px-6 py-3 font-medium">Status</th>
-                        <th className="px-6 py-3 font-medium text-right">Time Logged</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-50">
-                      {selectedTrip.logs.map(log => {
-                        const student = getStudentById(log.studentId);
-                        return (
-                          <tr key={log.studentId} className="hover:bg-gray-50">
-                            <td className="px-6 py-4 font-bold text-gray-700">{student?.name || log.studentId}</td>
-                            <td className="px-6 py-4">
-                              <span className={`text-xs px-2.5 py-1 rounded-full font-bold ${
-                                log.status === 'ABSENT' ? 'bg-red-50 text-red-600 border border-red-100' : 'bg-green-50 text-green-600 border border-green-100'
-                              }`}>
-                                {log.status}
-                              </span>
-                            </td>
-                            <td className="px-6 py-4 text-gray-400 font-mono text-xs text-right">
-                              {new Date(log.timestamp).toLocaleTimeString()}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                 </table>
                </div>
 
                {selectedTrip.incidents.length > 0 && (

@@ -1,10 +1,9 @@
 
-
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useMsal, useIsAuthenticated } from "@azure/msal-react";
-import { loginRequest, isMsalConfigured } from "./services/authConfig";
+import { loginRequest } from "./services/authConfig";
 import { UserRole, RouteType, Student, StudentStatus, Bus, AttendanceLog, GeoPoint, Incident } from './types';
-import { BUSES, STUDENTS, getStudentById } from './services/mockData';
+import { BUSES } from './services/mockData';
 import { generateTripReport } from './services/geminiService';
 import { PowerSchoolService } from './services/powerSchool';
 import { LiveTrackingService, LiveTripState } from './services/liveTracking';
@@ -14,27 +13,22 @@ import UserAvatar from './components/UserAvatar';
 import StudentSearchModal from './components/StudentSearchModal';
 import { 
   Bus as BusIcon, 
-  MapPin, 
   CheckCircle2, 
   QrCode, 
   LogOut, 
   ChevronRight, 
-  Search,
   Loader2,
-  Users,
-  Navigation,
   AlertTriangle,
-  Siren,
   X,
   Square,
   UserPlus,
   Check,
   ShieldAlert,
   Terminal,
-  MousePointerClick,
   Copy,
   Settings,
-  HelpCircle
+  HelpCircle,
+  Navigation
 } from 'lucide-react';
 
 // --- Helper Functions ---
@@ -61,14 +55,6 @@ const getCurrentLocation = (): Promise<GeoPoint | null> => {
       { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
     );
   });
-};
-
-const formatDuration = (ms: number) => {
-    const seconds = Math.floor((ms / 1000) % 60);
-    const minutes = Math.floor((ms / (1000 * 60)) % 60);
-    const hours = Math.floor((ms / (1000 * 60 * 60)) % 24);
-    
-    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
 };
 
 // --- Branding Component ---
@@ -255,48 +241,33 @@ const AppContent: React.FC<{ isDevMode: boolean }> = ({ isDevMode }) => {
   const [showIncidentModal, setShowIncidentModal] = useState(false);
   const [generatedReport, setGeneratedReport] = useState<string>("");
 
+  // Data State
+  const [loadedStudents, setLoadedStudents] = useState<Student[]>([]);
+
   const liveService = LiveTrackingService.getInstance();
+  const psService = PowerSchoolService.getInstance();
   const locationInterval = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // --- Derived State ---
-  const currentBus = BUSES.find(b => b.id === selectedBusId);
-  const assignedStudents = useMemo(() => {
-     return STUDENTS.filter(s => s.busId === selectedBusId);
-  }, [selectedBusId]);
-
-  // Combined list of all students involved in this trip (assigned + ad-hoc added)
-  const allTripStudents = useMemo(() => {
-    // Start with assigned
-    const map = new Map<string, Student>();
-    assignedStudents.forEach(s => map.set(s.id, s));
-    
-    // Add any from logs that aren't assigned (Ad-hoc adds)
-    tripLogs.forEach(log => {
-        if (!map.has(log.studentId)) {
-            const student = getStudentById(log.studentId);
-            if (student) map.set(student.id, student);
-        }
-    });
-    
-    return Array.from(map.values());
-  }, [assignedStudents, tripLogs]);
-
-  const boardedStudents = useMemo(() => {
-    return allTripStudents.filter(s => {
-        const log = tripLogs.find(l => l.studentId === s.id);
-        return log && log.status === StudentStatus.ON_BUS;
-    });
-  }, [allTripStudents, tripLogs]);
-
-  const pendingStudents = useMemo(() => {
-    return allTripStudents.filter(s => {
-        const log = tripLogs.find(l => l.studentId === s.id);
-        // Only show pending if they were originally assigned. Ad-hoc students appear when added.
-        return (!log || log.status === StudentStatus.PENDING) && s.busId === selectedBusId;
-    });
-  }, [allTripStudents, tripLogs, selectedBusId]);
-
   // --- Effects ---
+
+  // Load students from PowerSchool Service on Mount
+  useEffect(() => {
+      const initStudents = async () => {
+          // If cached exists, use it
+          let data = psService.getCachedStudents();
+          if (data.length === 0) {
+             try {
+                // If no cache, try to sync (assumes backend is running)
+                const result = await psService.syncStudents();
+                data = result.students;
+             } catch (e) {
+                console.warn("Could not sync initial students");
+             }
+          }
+          setLoadedStudents(data);
+      };
+      initStudents();
+  }, []);
 
   // Location Polling during Trip
   useEffect(() => {
@@ -327,7 +298,46 @@ const AppContent: React.FC<{ isDevMode: boolean }> = ({ isDevMode }) => {
     return () => {
         if (locationInterval.current) clearInterval(locationInterval.current);
     };
-  }, [tripActive, selectedBusId, routeType, tripLogs, allTripStudents]);
+  }, [tripActive, selectedBusId, routeType, tripLogs]);
+
+  // --- Derived State ---
+  const currentBus = BUSES.find(b => b.id === selectedBusId);
+  const assignedStudents = useMemo(() => {
+     return loadedStudents.filter(s => s.busId === selectedBusId);
+  }, [selectedBusId, loadedStudents]);
+
+  // Combined list of all students involved in this trip (assigned + ad-hoc added)
+  const allTripStudents = useMemo(() => {
+    // Start with assigned
+    const map = new Map<string, Student>();
+    assignedStudents.forEach(s => map.set(s.id, s));
+    
+    // Add any from logs that aren't assigned (Ad-hoc adds)
+    tripLogs.forEach(log => {
+        if (!map.has(log.studentId)) {
+            // Try to find in loadedStudents first
+            const student = loadedStudents.find(s => s.id === log.studentId);
+            if (student) map.set(student.id, student);
+        }
+    });
+    
+    return Array.from(map.values());
+  }, [assignedStudents, tripLogs, loadedStudents]);
+
+  const boardedStudents = useMemo(() => {
+    return allTripStudents.filter(s => {
+        const log = tripLogs.find(l => l.studentId === s.id);
+        return log && log.status === StudentStatus.ON_BUS;
+    });
+  }, [allTripStudents, tripLogs]);
+
+  const pendingStudents = useMemo(() => {
+    return allTripStudents.filter(s => {
+        const log = tripLogs.find(l => l.studentId === s.id);
+        // Only show pending if they were originally assigned. Ad-hoc students appear when added.
+        return (!log || log.status === StudentStatus.PENDING) && s.busId === selectedBusId;
+    });
+  }, [allTripStudents, tripLogs, selectedBusId]);
 
 
   // --- Handlers ---
@@ -365,17 +375,17 @@ const AppContent: React.FC<{ isDevMode: boolean }> = ({ isDevMode }) => {
 
   const handleScan = async (studentId: string) => {
     setShowScanner(false);
-    // Find student
-    const student = getStudentById(studentId);
+    
+    // Find student in loaded list or via service search if missing
+    let student = loadedStudents.find(s => s.id === studentId);
+    
+    // If not in current list, try to fetch specific one (Ad-hoc from backend)
+    if (!student) {
+       const results = await psService.searchStudents(studentId);
+       if (results.length > 0) student = results[0];
+    }
     
     if (student) {
-        // Validate Bus Assignment (Warning only for ad-hoc)
-        if (student.busId !== selectedBusId) {
-             // In real app, might ask for confirmation. For now, we allow adding them (Ad-Hoc)
-             // but maybe show a different toast
-             console.log("Ad-hoc boarding");
-        }
-
         const loc = await getCurrentLocation();
         
         // Toggle Status logic (On Bus vs Off Bus)
@@ -405,7 +415,7 @@ const AppContent: React.FC<{ isDevMode: boolean }> = ({ isDevMode }) => {
         setScannedStudent(student);
         setTimeout(() => setScannedStudent(null), 3000); // Clear toast
     } else {
-        alert("Student ID not found in local manifest.");
+        alert("Student ID not found in system.");
     }
   };
 
@@ -415,7 +425,11 @@ const AppContent: React.FC<{ isDevMode: boolean }> = ({ isDevMode }) => {
 
   const handleAddStudentFromSearch = (student: Student) => {
       setShowSearchModal(false);
-      handleScan(student.id); // Re-use scan logic to add them to log
+      // Ensure this student is in our local state so they render correctly
+      if (!loadedStudents.find(s => s.id === student.id)) {
+          setLoadedStudents(prev => [...prev, student]);
+      }
+      handleScan(student.id);
   };
 
   const handleReportIncident = (type: Incident['type'], desc: string, severity: Incident['severity']) => {
@@ -598,16 +612,22 @@ const AppContent: React.FC<{ isDevMode: boolean }> = ({ isDevMode }) => {
                         <span className="text-sm font-bold text-gray-600">Manifest Preview</span>
                         <span className="text-xs bg-gray-100 px-2 py-1 rounded text-gray-500">{assignedStudents.length} Students</span>
                     </div>
-                    <div className="flex -space-x-2 overflow-hidden py-2">
-                        {assignedStudents.slice(0, 6).map(s => (
-                            <img key={s.id} className="inline-block h-8 w-8 rounded-full ring-2 ring-white" src={s.photoUrl} alt=""/>
-                        ))}
-                        {assignedStudents.length > 6 && (
-                            <div className="h-8 w-8 rounded-full bg-gray-100 ring-2 ring-white flex items-center justify-center text-[10px] font-bold text-gray-500">
-                                +{assignedStudents.length - 6}
-                            </div>
-                        )}
-                    </div>
+                    {assignedStudents.length === 0 ? (
+                        <div className="text-center py-4 text-xs text-gray-400 italic">
+                            No students assigned or data not synced.
+                        </div>
+                    ) : (
+                        <div className="flex -space-x-2 overflow-hidden py-2">
+                            {assignedStudents.slice(0, 6).map(s => (
+                                <img key={s.id} className="inline-block h-8 w-8 rounded-full ring-2 ring-white" src={s.photoUrl} alt=""/>
+                            ))}
+                            {assignedStudents.length > 6 && (
+                                <div className="h-8 w-8 rounded-full bg-gray-100 ring-2 ring-white flex items-center justify-center text-[10px] font-bold text-gray-500">
+                                    +{assignedStudents.length - 6}
+                                </div>
+                            )}
+                        </div>
+                    )}
                 </div>
               </div>
 

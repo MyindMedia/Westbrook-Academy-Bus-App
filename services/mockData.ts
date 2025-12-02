@@ -1,3 +1,4 @@
+
 import { Bus, Student, CompletedTrip, RouteType, StudentStatus, Incident } from "../types";
 
 export const BUSES: Bus[] = [
@@ -27,100 +28,23 @@ export const BUSES: Bus[] = [
 export const SCHOOL_ADDRESS = "2340 Firestone Blvd, South Gate, CA 90280";
 export const SCHOOL_LOCATION = { lat: 33.947236, lng: -118.215324 };
 
-// Placeholder images using picsum
-export const STUDENTS: Student[] = [
-  {
-    id: "S001",
-    name: "Alex Johnson",
-    grade: 11,
-    photoUrl: "https://picsum.photos/200/200?random=1",
-    busId: "BUS-A",
-    parentPhone: "555-0101"
-  },
-  {
-    id: "S002",
-    name: "Sarah Williams",
-    grade: 10,
-    photoUrl: "https://picsum.photos/200/200?random=2",
-    busId: "BUS-A",
-    parentPhone: "555-0102"
-  },
-  {
-    id: "S003",
-    name: "Michael Brown",
-    grade: 12,
-    photoUrl: "https://picsum.photos/200/200?random=3",
-    busId: "BUS-A",
-    parentPhone: "555-0103"
-  },
-  {
-    id: "S004",
-    name: "Emily Davis",
-    grade: 7,
-    photoUrl: "https://picsum.photos/200/200?random=4",
-    busId: "BUS-B",
-    parentPhone: "555-0104"
-  },
-  {
-    id: "S005",
-    name: "David Wilson",
-    grade: 8,
-    photoUrl: "https://picsum.photos/200/200?random=5",
-    busId: "BUS-B",
-    parentPhone: "555-0105"
-  },
-   {
-    id: "S006",
-    name: "Jessica Miller",
-    grade: 6,
-    photoUrl: "https://picsum.photos/200/200?random=6",
-    busId: "BUS-B",
-    parentPhone: "555-0106"
-  },
-  {
-    id: "S007",
-    name: "Daniel Martinez",
-    grade: 9,
-    photoUrl: "https://picsum.photos/200/200?random=7",
-    busId: "BUS-C",
-    parentPhone: "555-0107"
-  }
-];
+// --- STUDENTS CLEARED (Use PowerSchool Service) ---
+export const STUDENTS: Student[] = [];
 
-// --- GLOBAL DATABASE SIMULATION ---
-// This simulates the thousands of students in PowerSchool that aren't on the current bus manifest
-const GLOBAL_STUDENT_DB: Student[] = [
-    ...STUDENTS, // Include the known ones
-    { id: "S020", name: "Aaron Aaronson", grade: 9, photoUrl: "https://picsum.photos/200/200?random=20", busId: "UNASSIGNED", parentPhone: "555-9999" },
-    { id: "S021", name: "Bethany Blake", grade: 11, photoUrl: "https://picsum.photos/200/200?random=21", busId: "BUS-C", parentPhone: "555-9998" },
-    { id: "S022", name: "Charlie Chase", grade: 10, photoUrl: "https://picsum.photos/200/200?random=22", busId: "UNASSIGNED", parentPhone: "555-9997" },
-    { id: "S023", name: "Diana Prince", grade: 12, photoUrl: "https://picsum.photos/200/200?random=23", busId: "BUS-A", parentPhone: "555-9996" },
-    { id: "S024", name: "Evan Evanovich", grade: 9, photoUrl: "https://picsum.photos/200/200?random=24", busId: "BUS-B", parentPhone: "555-9995" },
-    { id: "S025", name: "Fiona Gallagher", grade: 11, photoUrl: "https://picsum.photos/200/200?random=25", busId: "UNASSIGNED", parentPhone: "555-9994" },
-    { id: "S026", name: "George Costanza", grade: 12, photoUrl: "https://picsum.photos/200/200?random=26", busId: "BUS-C", parentPhone: "555-9993" },
-    { id: "S027", name: "Hannah Montana", grade: 8, photoUrl: "https://picsum.photos/200/200?random=27", busId: "BUS-B", parentPhone: "555-9992" },
-    { id: "S028", name: "Ivan Drago", grade: 12, photoUrl: "https://picsum.photos/200/200?random=28", busId: "BUS-A", parentPhone: "555-9991" },
-];
+// --- GLOBAL DB CLEARED ---
+const GLOBAL_STUDENT_DB: Student[] = [];
 
-export const getStudentsForBus = (busId: string): Student[] => {
-  return STUDENTS.filter(s => s.busId === busId);
-};
-
+// Helper to look up student by ID (Now relies on the service or passed context primarily)
 export const getStudentById = (id: string): Student | undefined => {
-  // Check local manifest first, then global DB
   return GLOBAL_STUDENT_DB.find(s => s.id.toLowerCase() === id.toLowerCase());
 };
 
 export const searchGlobalStudents = (query: string): Student[] => {
-    if (!query || query.length < 2) return [];
-    const lowerQ = query.toLowerCase();
-    return GLOBAL_STUDENT_DB.filter(s => 
-        s.name.toLowerCase().includes(lowerQ) || 
-        s.id.toLowerCase().includes(lowerQ)
-    );
+    // This is now a fallback that returns empty if no cached data exists
+    return [];
 };
 
-// --- MOCK HISTORY DATA FOR DASHBOARD ---
+// --- MOCK HISTORY DATA FOR DASHBOARD (Kept for visual layout of charts/tables only) ---
 
 export const MOCK_INCIDENTS: Incident[] = [
   {
@@ -138,7 +62,7 @@ export const MOCK_INCIDENTS: Incident[] = [
     driverName: "Jane Doe",
     timestamp: new Date(Date.now() - 3600000 * 4).toISOString(),
     type: "Behavior",
-    description: "Student S005 refused to sit down while bus was in motion.",
+    description: "Student refused to sit down while bus was in motion.",
     severity: "Medium"
   }
 ];
@@ -154,11 +78,7 @@ export const MOCK_TRIPS: CompletedTrip[] = [
     startTime: "07:15 AM",
     endTime: "08:05 AM",
     incidents: [],
-    logs: [
-      { studentId: "S001", status: StudentStatus.ON_BUS, timestamp: new Date(Date.now() - 20000000).toISOString(), location: { lat: 0, lng: 0 } },
-      { studentId: "S002", status: StudentStatus.ON_BUS, timestamp: new Date(Date.now() - 19800000).toISOString(), location: { lat: 0, lng: 0 } },
-      { studentId: "S003", status: StudentStatus.ABSENT, timestamp: new Date(Date.now() - 19000000).toISOString(), location: { lat: 0, lng: 0 } },
-    ]
+    logs: []
   },
   {
     id: "TRIP-1002",
@@ -170,10 +90,6 @@ export const MOCK_TRIPS: CompletedTrip[] = [
     startTime: "07:30 AM",
     endTime: "08:15 AM",
     incidents: [MOCK_INCIDENTS[1]],
-    logs: [
-      { studentId: "S004", status: StudentStatus.ON_BUS, timestamp: new Date(Date.now() - 18000000).toISOString(), location: { lat: 0, lng: 0 } },
-      { studentId: "S005", status: StudentStatus.ON_BUS, timestamp: new Date(Date.now() - 17900000).toISOString(), location: { lat: 0, lng: 0 } },
-      { studentId: "S006", status: StudentStatus.ON_BUS, timestamp: new Date(Date.now() - 17800000).toISOString(), location: { lat: 0, lng: 0 } },
-    ]
+    logs: []
   }
 ];
