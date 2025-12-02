@@ -5,6 +5,7 @@ import { CompletedTrip, Incident } from '../types';
 import { PowerSchoolService } from '../services/powerSchool';
 import { LiveTrackingService, LiveTripState } from '../services/liveTracking';
 import MapView from './MapView';
+import UserAvatar from './UserAvatar';
 import { Clock, AlertTriangle, X, User, RefreshCw, Check, Database, Radio, ArrowUpRight } from 'lucide-react';
 
 const Dashboard: React.FC = () => {
@@ -62,21 +63,26 @@ const Dashboard: React.FC = () => {
 
   return (
     <div className="p-8 bg-gray-50/50 min-h-screen">
-      <div className="flex justify-between items-end mb-8">
+      <div className="flex justify-between items-start mb-8">
         <div>
            <h1 className="text-3xl font-black text-gray-900 tracking-tight">Operations Dashboard</h1>
            <p className="text-gray-500 mt-1">Real-time fleet monitoring and student safety system</p>
         </div>
         
-        {/* PowerSchool Status Pill */}
-        <div className="flex items-center gap-3 bg-white px-5 py-2.5 rounded-full shadow-sm border border-gray-200">
-           <div className="flex flex-col items-end mr-2">
-              <span className="text-xs font-bold text-gray-700">PowerSchool SIS</span>
-              <span className="text-[10px] text-gray-400 font-mono">
-                {lastSync ? `Last Sync: ${lastSync.toLocaleTimeString()}` : 'System Connected'}
-              </span>
-           </div>
-           <div className={`w-3 h-3 rounded-full ${syncing ? 'bg-yellow-400 animate-pulse' : 'bg-green-500 shadow-[0_0_10px_rgba(34,197,94,0.4)]'}`}></div>
+        <div className="flex items-center gap-4">
+             {/* PowerSchool Status Pill */}
+            <div className="flex items-center gap-3 bg-white px-5 py-2.5 rounded-full shadow-sm border border-gray-200">
+            <div className="flex flex-col items-end mr-2">
+                <span className="text-xs font-bold text-gray-700">PowerSchool SIS</span>
+                <span className="text-[10px] text-gray-400 font-mono">
+                    {lastSync ? `Last Sync: ${lastSync.toLocaleTimeString()}` : 'System Connected'}
+                </span>
+            </div>
+            <div className={`w-3 h-3 rounded-full ${syncing ? 'bg-yellow-400 animate-pulse' : 'bg-green-500 shadow-[0_0_10px_rgba(34,197,94,0.4)]'}`}></div>
+            </div>
+
+            {/* Admin Avatar */}
+            <UserAvatar isDevMode={false} size="md" />
         </div>
       </div>
 
