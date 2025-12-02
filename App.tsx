@@ -1,15 +1,17 @@
 
+
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useMsal, useIsAuthenticated } from "@azure/msal-react";
 import { loginRequest, isMsalConfigured } from "./services/authConfig";
 import { UserRole, RouteType, Student, StudentStatus, Bus, AttendanceLog, GeoPoint, Incident } from './types';
-import { BUSES, STUDENTS } from './services/mockData';
+import { BUSES, STUDENTS, getStudentById } from './services/mockData';
 import { generateTripReport } from './services/geminiService';
 import { PowerSchoolService } from './services/powerSchool';
 import { LiveTrackingService, LiveTripState } from './services/liveTracking';
 import Scanner from './components/Scanner';
 import Dashboard from './components/Dashboard';
 import UserAvatar from './components/UserAvatar';
+import StudentSearchModal from './components/StudentSearchModal';
 import { 
   Bus as BusIcon, 
   MapPin, 
@@ -247,6 +249,7 @@ const AppContent: React.FC<{ isDevMode: boolean }> = ({ isDevMode }) => {
 
   // UI STATE
   const [showScanner, setShowScanner] = useState(false);
+  const [showSearchModal, setShowSearchModal] = useState(false);
   const [scannedStudent, setScannedStudent] = useState<Student | null>(null);
   const [loadingReport, setLoadingReport] = useState(false);
   const [showIncidentModal, setShowIncidentModal] = useState(false);
@@ -261,19 +264,37 @@ const AppContent: React.FC<{ isDevMode: boolean }> = ({ isDevMode }) => {
      return STUDENTS.filter(s => s.busId === selectedBusId);
   }, [selectedBusId]);
 
+  // Combined list of all students involved in this trip (assigned + ad-hoc added)
+  const allTripStudents = useMemo(() => {
+    // Start with assigned
+    const map = new Map<string, Student>();
+    assignedStudents.forEach(s => map.set(s.id, s));
+    
+    // Add any from logs that aren't assigned (Ad-hoc adds)
+    tripLogs.forEach(log => {
+        if (!map.has(log.studentId)) {
+            const student = getStudentById(log.studentId);
+            if (student) map.set(student.id, student);
+        }
+    });
+    
+    return Array.from(map.values());
+  }, [assignedStudents, tripLogs]);
+
   const boardedStudents = useMemo(() => {
-    return assignedStudents.filter(s => {
+    return allTripStudents.filter(s => {
         const log = tripLogs.find(l => l.studentId === s.id);
         return log && log.status === StudentStatus.ON_BUS;
     });
-  }, [assignedStudents, tripLogs]);
+  }, [allTripStudents, tripLogs]);
 
   const pendingStudents = useMemo(() => {
-    return assignedStudents.filter(s => {
+    return allTripStudents.filter(s => {
         const log = tripLogs.find(l => l.studentId === s.id);
-        return !log || log.status === StudentStatus.PENDING;
+        // Only show pending if they were originally assigned. Ad-hoc students appear when added.
+        return (!log || log.status === StudentStatus.PENDING) && s.busId === selectedBusId;
     });
-  }, [assignedStudents, tripLogs]);
+  }, [allTripStudents, tripLogs, selectedBusId]);
 
   // --- Effects ---
 
@@ -295,7 +316,7 @@ const AppContent: React.FC<{ isDevMode: boolean }> = ({ isDevMode }) => {
                     currentLocation: loc,
                     logs: tripLogs,
                     studentCount: tripLogs.filter(l => l.status === StudentStatus.ON_BUS).length,
-                    totalStudents: assignedStudents.length,
+                    totalStudents: allTripStudents.length,
                     status: 'ACTIVE'
                 });
             }
@@ -306,7 +327,7 @@ const AppContent: React.FC<{ isDevMode: boolean }> = ({ isDevMode }) => {
     return () => {
         if (locationInterval.current) clearInterval(locationInterval.current);
     };
-  }, [tripActive, selectedBusId, routeType, tripLogs, assignedStudents]);
+  }, [tripActive, selectedBusId, routeType, tripLogs, allTripStudents]);
 
 
   // --- Handlers ---
@@ -334,7 +355,7 @@ const AppContent: React.FC<{ isDevMode: boolean }> = ({ isDevMode }) => {
       currentBus!,
       routeType,
       tripLogs,
-      assignedStudents,
+      allTripStudents,
       { start: tripStartLocation, end: loc },
       incidents
     );
@@ -345,13 +366,14 @@ const AppContent: React.FC<{ isDevMode: boolean }> = ({ isDevMode }) => {
   const handleScan = async (studentId: string) => {
     setShowScanner(false);
     // Find student
-    const student = STUDENTS.find(s => s.id === studentId);
+    const student = getStudentById(studentId);
     
     if (student) {
-        // Validate Bus Assignment
+        // Validate Bus Assignment (Warning only for ad-hoc)
         if (student.busId !== selectedBusId) {
-            alert(`WRONG BUS! ${student.name} is assigned to ${student.busId}`);
-            return;
+             // In real app, might ask for confirmation. For now, we allow adding them (Ad-Hoc)
+             // but maybe show a different toast
+             console.log("Ad-hoc boarding");
         }
 
         const loc = await getCurrentLocation();
@@ -361,7 +383,7 @@ const AppContent: React.FC<{ isDevMode: boolean }> = ({ isDevMode }) => {
         let newStatus = StudentStatus.ON_BUS;
         
         if (existingLogIndex >= 0) {
-            // If already on bus, mark as dropped off (or remove if accidental scan? Let's assume toggle for demo)
+            // If already on bus, mark as dropped off
             if (tripLogs[existingLogIndex].status === StudentStatus.ON_BUS) {
                 newStatus = StudentStatus.DROPPED_OFF;
             }
@@ -389,6 +411,11 @@ const AppContent: React.FC<{ isDevMode: boolean }> = ({ isDevMode }) => {
 
   const handleManualCheckIn = (student: Student) => {
       handleScan(student.id);
+  };
+
+  const handleAddStudentFromSearch = (student: Student) => {
+      setShowSearchModal(false);
+      handleScan(student.id); // Re-use scan logic to add them to log
   };
 
   const handleReportIncident = (type: Incident['type'], desc: string, severity: Incident['severity']) => {
@@ -473,7 +500,7 @@ const AppContent: React.FC<{ isDevMode: boolean }> = ({ isDevMode }) => {
              >
                  <LogOut size={20} />
              </button>
-             <Dashboard />
+             <Dashboard isDevMode={isDevMode} />
         </div>
       );
   }
@@ -679,6 +706,7 @@ const AppContent: React.FC<{ isDevMode: boolean }> = ({ isDevMode }) => {
                                         <div>
                                             <p className="font-bold text-green-900 line-through decoration-green-500/50">{student.name}</p>
                                             <p className="text-xs text-green-700">On Board • {new Date(tripLogs.find(l=>l.studentId===student.id)?.timestamp || '').toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</p>
+                                            {student.busId !== selectedBusId && <span className="ml-1 text-[10px] bg-orange-200 text-orange-800 px-1 rounded">AD-HOC</span>}
                                         </div>
                                     </div>
                                     <div className="w-6 h-6 bg-green-200 rounded-full flex items-center justify-center">
@@ -698,24 +726,31 @@ const AppContent: React.FC<{ isDevMode: boolean }> = ({ isDevMode }) => {
                  <div className="w-full h-1 bg-gray-100 rounded-full mb-4 overflow-hidden">
                     <div 
                         className="h-full bg-green-500 transition-all duration-500"
-                        style={{ width: `${(boardedStudents.length / assignedStudents.length) * 100}%` }}
+                        style={{ width: `${allTripStudents.length > 0 ? (boardedStudents.length / allTripStudents.length) * 100 : 0}%` }}
                     ></div>
                  </div>
 
-                 <div className="grid grid-cols-4 gap-3">
+                 <div className="grid grid-cols-4 gap-2">
                      <button 
                         onClick={() => setShowScanner(true)}
-                        className="col-span-3 bg-westbrook-blue text-white h-14 rounded-2xl font-bold text-lg flex items-center justify-center gap-2 shadow-lg shadow-blue-200 hover:bg-blue-700 active:scale-95 transition-all"
+                        className="col-span-2 bg-westbrook-blue text-white h-14 rounded-2xl font-bold text-base flex items-center justify-center gap-2 shadow-lg shadow-blue-200 hover:bg-blue-700 active:scale-95 transition-all"
                      >
-                         <QrCode size={24} />
-                         Scan Student ID
+                         <QrCode size={20} />
+                         Scan ID
+                     </button>
+                     <button 
+                        onClick={() => setShowSearchModal(true)}
+                        className="col-span-1 bg-gray-100 text-gray-700 h-14 rounded-2xl font-bold text-xs flex flex-col items-center justify-center gap-1 hover:bg-gray-200"
+                     >
+                        <UserPlus size={18} />
+                        Add
                      </button>
                      <button 
                         onClick={handleEndTrip}
                         className="col-span-1 bg-gray-100 text-red-600 h-14 rounded-2xl font-bold text-xs flex flex-col items-center justify-center gap-1 hover:bg-red-50"
                      >
                         <Square size={18} fill="currentColor" />
-                        End Trip
+                        End
                      </button>
                  </div>
             </div>
@@ -723,6 +758,10 @@ const AppContent: React.FC<{ isDevMode: boolean }> = ({ isDevMode }) => {
             {/* Modals */}
             {showScanner && (
                 <Scanner onScan={handleScan} onClose={() => setShowScanner(false)} />
+            )}
+
+            {showSearchModal && (
+                <StudentSearchModal onClose={() => setShowSearchModal(false)} onAddStudent={handleAddStudentFromSearch} />
             )}
 
             {scannedStudent && (

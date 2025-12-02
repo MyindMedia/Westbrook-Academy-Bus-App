@@ -1,50 +1,6 @@
 
 import { Student } from '../types';
-import { STUDENTS } from './mockData';
-
-// Types representing PowerSchool API responses
-export interface PowerSchoolCredentials {
-  clientId: string;
-  clientSecret: string;
-  url: string;
-}
-
-interface PSStudent {
-  id: string; // DCID
-  local_id: number;
-  name: {
-    first: string;
-    last: string;
-  };
-  grade_level: number;
-  school_id: number;
-  contact: {
-    guardian_phone: string;
-  };
-  transportation: {
-    bus_assignment: string;
-  };
-}
-
-// Simulated "New" students that appear after a sync
-const NEW_STUDENTS_FROM_PS: Student[] = [
-  {
-    id: "S008",
-    name: "New Student (Synced)",
-    grade: 10,
-    photoUrl: "https://picsum.photos/200/200?random=8",
-    busId: "BUS-A",
-    parentPhone: "555-0108"
-  },
-  {
-    id: "S009",
-    name: "Transfer Student",
-    grade: 11,
-    photoUrl: "https://picsum.photos/200/200?random=9",
-    busId: "BUS-C",
-    parentPhone: "555-0109"
-  }
-];
+import { STUDENTS, searchGlobalStudents } from './mockData';
 
 export class PowerSchoolService {
   private static instance: PowerSchoolService;
@@ -60,47 +16,79 @@ export class PowerSchoolService {
     return PowerSchoolService.instance;
   }
 
-  // Simulate OAuth2 Flow
-  public async authenticate(creds: PowerSchoolCredentials): Promise<boolean> {
-    console.log(`Connecting to PowerSchool at ${creds.url}...`);
-    
-    // Simulate network delay
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    
-    // Simple validation simulation
-    if (creds.clientId && creds.clientSecret) {
-      this.isConnected = true;
-      return true;
-    }
-    return false;
+  // This is now handled by the backend /connect route, but we keep this to check status
+  public async checkConnection(): Promise<boolean> {
+     try {
+         // Attempt to fetch students as a "ping"
+         // In a real app, we'd have a /status endpoint
+         const res = await fetch('/api/powerschool/students');
+         if (res.status === 200) {
+             this.isConnected = true;
+             return true;
+         }
+         return false;
+     } catch (e) {
+         return false;
+     }
   }
 
   public async syncStudents(): Promise<{ added: number, updated: number, students: Student[] }> {
-    if (!this.isConnected) {
-      // Auto-connect for demo purposes if not explicitly connected
-      await new Promise(resolve => setTimeout(resolve, 800));
-      this.isConnected = true;
+    console.log("Starting Sync...");
+    
+    try {
+        // Try Real Backend First
+        const response = await fetch('/api/powerschool/students');
+        
+        if (response.ok) {
+            const realData: Student[] = await response.json();
+            console.log("Fetched real data from PowerSchool:", realData.length);
+            
+            this.isConnected = true;
+            this.lastSync = new Date();
+            
+            return {
+                added: realData.length,
+                updated: 0,
+                students: realData // In a real app, you'd merge this with local state
+            };
+        } else {
+            throw new Error("Backend returned error");
+        }
+    } catch (e) {
+        console.warn("Backend Sync Failed (Server likely offline). Falling back to Mock Data.", e);
+        
+        // Fallback to Mock Data simulation
+        await new Promise(resolve => setTimeout(resolve, 1500));
+        this.isConnected = true; // Pretend it worked for demo
+        this.lastSync = new Date();
+        
+        return {
+            added: 0,
+            updated: 0,
+            students: STUDENTS
+        };
     }
+  }
 
-    console.log("Fetching /ws/v1/district/student...");
-    await new Promise(resolve => setTimeout(resolve, 2000));
+  public async searchStudents(query: string): Promise<Student[]> {
+      // 1. Try Local Mock DB first for speed (Mock Data)
+      const localResults = searchGlobalStudents(query);
+      if (localResults.length > 0) return localResults;
 
-    this.lastSync = new Date();
-
-    // Return current mock students + the "new" simulated ones
-    // In a real app, this maps JSON response -> Student Interface
-    return {
-      added: 2,
-      updated: 5,
-      students: [...STUDENTS, ...NEW_STUDENTS_FROM_PS]
-    };
+      // 2. If nothing locally, try real backend
+      try {
+          const response = await fetch(`/api/powerschool/students?search=${encodeURIComponent(query)}`);
+          if (response.ok) {
+              return await response.json();
+          }
+      } catch (e) {
+          // ignore
+      }
+      
+      return [];
   }
 
   public getLastSyncTime(): Date | null {
     return this.lastSync;
-  }
-
-  public getConnectionStatus(): boolean {
-    return this.isConnected;
   }
 }

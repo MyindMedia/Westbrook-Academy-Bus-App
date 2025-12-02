@@ -6,15 +6,21 @@ import { PowerSchoolService } from '../services/powerSchool';
 import { LiveTrackingService, LiveTripState } from '../services/liveTracking';
 import MapView from './MapView';
 import UserAvatar from './UserAvatar';
-import { Clock, AlertTriangle, X, User, RefreshCw, Check, Database, Radio, ArrowUpRight } from 'lucide-react';
+import PowerSchoolHelp from './PowerSchoolHelp';
+import { Clock, AlertTriangle, X, User, RefreshCw, Check, Database, Radio, ArrowUpRight, HelpCircle } from 'lucide-react';
 
-const Dashboard: React.FC = () => {
+interface DashboardProps {
+    isDevMode?: boolean;
+}
+
+const Dashboard: React.FC<DashboardProps> = ({ isDevMode = false }) => {
   const [selectedTrip, setSelectedTrip] = useState<CompletedTrip | null>(null);
   
   // PowerSchool State
   const [syncing, setSyncing] = useState(false);
   const [lastSync, setLastSync] = useState<Date | null>(null);
   const [syncStatus, setSyncStatus] = useState<'IDLE' | 'SUCCESS' | 'ERROR'>('IDLE');
+  const [showPSHelp, setShowPSHelp] = useState(false);
   
   // LIVE TRACKING STATE
   const [activeTrips, setActiveTrips] = useState<Record<string, LiveTripState>>({});
@@ -82,7 +88,7 @@ const Dashboard: React.FC = () => {
             </div>
 
             {/* Admin Avatar */}
-            <UserAvatar isDevMode={false} size="md" />
+            <UserAvatar isDevMode={isDevMode} size="md" />
         </div>
       </div>
 
@@ -92,14 +98,19 @@ const Dashboard: React.FC = () => {
         <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 lg:col-span-1 flex flex-col justify-between relative overflow-hidden group">
             <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-blue-50 to-transparent rounded-bl-full -mr-10 -mt-10 opacity-60 pointer-events-none transition-transform group-hover:scale-110"></div>
             
-            <div>
-                <div className="w-10 h-10 bg-blue-50 text-westbrook-blue rounded-xl flex items-center justify-center mb-4">
-                    <Database size={20} />
+            <div className="flex justify-between items-start">
+                <div>
+                    <div className="w-10 h-10 bg-blue-50 text-westbrook-blue rounded-xl flex items-center justify-center mb-4">
+                        <Database size={20} />
+                    </div>
+                    <h3 className="text-lg font-bold text-gray-800 mb-1">
+                        Student Database
+                    </h3>
+                    <p className="text-xs text-gray-500 mb-6 leading-relaxed">Manage data sync between PowerSchool SIS and local fleet manifest.</p>
                 </div>
-                <h3 className="text-lg font-bold text-gray-800 mb-1">
-                    Student Database
-                </h3>
-                <p className="text-xs text-gray-500 mb-6 leading-relaxed">Manage data sync between PowerSchool SIS and local fleet manifest.</p>
+                <button onClick={() => setShowPSHelp(true)} className="p-2 bg-gray-50 text-gray-400 rounded-full hover:bg-blue-50 hover:text-blue-500 transition-colors">
+                    <HelpCircle size={18} />
+                </button>
             </div>
 
             <div className="space-y-3 relative z-10">
@@ -396,6 +407,11 @@ const Dashboard: React.FC = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* PowerSchool Help Modal */}
+      {showPSHelp && (
+          <PowerSchoolHelp onClose={() => setShowPSHelp(false)} />
       )}
 
     </div>

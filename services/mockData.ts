@@ -87,12 +87,37 @@ export const STUDENTS: Student[] = [
   }
 ];
 
+// --- GLOBAL DATABASE SIMULATION ---
+// This simulates the thousands of students in PowerSchool that aren't on the current bus manifest
+const GLOBAL_STUDENT_DB: Student[] = [
+    ...STUDENTS, // Include the known ones
+    { id: "S020", name: "Aaron Aaronson", grade: 9, photoUrl: "https://picsum.photos/200/200?random=20", busId: "UNASSIGNED", parentPhone: "555-9999" },
+    { id: "S021", name: "Bethany Blake", grade: 11, photoUrl: "https://picsum.photos/200/200?random=21", busId: "BUS-C", parentPhone: "555-9998" },
+    { id: "S022", name: "Charlie Chase", grade: 10, photoUrl: "https://picsum.photos/200/200?random=22", busId: "UNASSIGNED", parentPhone: "555-9997" },
+    { id: "S023", name: "Diana Prince", grade: 12, photoUrl: "https://picsum.photos/200/200?random=23", busId: "BUS-A", parentPhone: "555-9996" },
+    { id: "S024", name: "Evan Evanovich", grade: 9, photoUrl: "https://picsum.photos/200/200?random=24", busId: "BUS-B", parentPhone: "555-9995" },
+    { id: "S025", name: "Fiona Gallagher", grade: 11, photoUrl: "https://picsum.photos/200/200?random=25", busId: "UNASSIGNED", parentPhone: "555-9994" },
+    { id: "S026", name: "George Costanza", grade: 12, photoUrl: "https://picsum.photos/200/200?random=26", busId: "BUS-C", parentPhone: "555-9993" },
+    { id: "S027", name: "Hannah Montana", grade: 8, photoUrl: "https://picsum.photos/200/200?random=27", busId: "BUS-B", parentPhone: "555-9992" },
+    { id: "S028", name: "Ivan Drago", grade: 12, photoUrl: "https://picsum.photos/200/200?random=28", busId: "BUS-A", parentPhone: "555-9991" },
+];
+
 export const getStudentsForBus = (busId: string): Student[] => {
   return STUDENTS.filter(s => s.busId === busId);
 };
 
 export const getStudentById = (id: string): Student | undefined => {
-  return STUDENTS.find(s => s.id.toLowerCase() === id.toLowerCase() || s.name.toLowerCase().includes(id.toLowerCase()));
+  // Check local manifest first, then global DB
+  return GLOBAL_STUDENT_DB.find(s => s.id.toLowerCase() === id.toLowerCase());
+};
+
+export const searchGlobalStudents = (query: string): Student[] => {
+    if (!query || query.length < 2) return [];
+    const lowerQ = query.toLowerCase();
+    return GLOBAL_STUDENT_DB.filter(s => 
+        s.name.toLowerCase().includes(lowerQ) || 
+        s.id.toLowerCase().includes(lowerQ)
+    );
 };
 
 // --- MOCK HISTORY DATA FOR DASHBOARD ---
