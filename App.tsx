@@ -1,5 +1,7 @@
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
+import { useMsal, useIsAuthenticated } from "@azure/msal-react";
+import { loginRequest, isMsalConfigured } from "./services/authConfig";
 import { UserRole, RouteType, Student, StudentStatus, Bus, AttendanceLog, GeoPoint, Incident } from './types';
 import { BUSES, STUDENTS, SCHOOL_ADDRESS } from './services/mockData';
 import { generateTripReport } from './services/geminiService';
@@ -146,15 +148,33 @@ const StudentCard: React.FC<StudentCardProps> = ({ student, status, onStatusChan
 // --- Auth Components ---
 
 const LoginScreen = ({ onLogin }: { onLogin: () => void }) => {
+  const { instance } = useMsal();
   const [loading, setLoading] = useState(false);
 
   const handleMicrosoftLogin = () => {
     setLoading(true);
-    // Simulate O365 Auth Flow
-    setTimeout(() => {
-      setLoading(false);
-      onLogin();
-    }, 1500);
+
+    if (isMsalConfigured) {
+      // Real O365 Authentication
+      instance.loginPopup(loginRequest)
+        .then((response) => {
+            console.log("Logged in:", response);
+            // In a real app, you would validate response.account
+            onLogin();
+        })
+        .catch((e) => {
+            console.error("Login failed", e);
+            setLoading(false);
+            alert("Authentication failed. Please check console or try simulation.");
+        });
+    } else {
+      // Fallback Simulation (If no Azure keys configured)
+      console.warn("MSAL not configured. Using Simulation.");
+      setTimeout(() => {
+        setLoading(false);
+        onLogin();
+      }, 1500);
+    }
   };
 
   return (
@@ -196,6 +216,9 @@ const LoginScreen = ({ onLogin }: { onLogin: () => void }) => {
            
            <div className="mt-6 text-center">
               <p className="text-xs text-blue-300">Authorized personnel only.</p>
+              {!isMsalConfigured && (
+                  <p className="text-[10px] text-yellow-300 mt-2 opacity-70">Dev Mode: Azure Keys Missing</p>
+              )}
            </div>
        </div>
     </div>
@@ -253,7 +276,11 @@ const RoleSelectionScreen = ({ onSelect, onLogout }: { onSelect: (role: UserRole
 // --- Main Application Component ---
 
 export default function App() {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const { instance, accounts } = useMsal();
+  const isAuthenticated = useIsAuthenticated();
+
+  // Internal state to track if we've passed the login screen (for simulation fallback)
+  const [internalAuth, setInternalAuth] = useState(false);
   const [userRole, setUserRole] = useState<UserRole>(UserRole.NONE);
   
   // Master Data State (Initialized from Mock, updated by PowerSchool)
@@ -307,7 +334,6 @@ export default function App() {
   }, [selectedBus, guestStudents, masterStudentList]);
   
   // LIVE TRACKING SYNC EFFECT
-  // Whenever logs, trip status, or location updates, we broadcast to the Shared Service
   useEffect(() => {
     if (tripActive && selectedBus) {
        const liveService = LiveTrackingService.getInstance();
@@ -325,7 +351,7 @@ export default function App() {
        };
        liveService.updateTripState(state);
     }
-  }, [tripActive, logs, selectedBus, routeType, allManifestStudents.length]); // Note: We don't depend on tripStats.start here to avoid loops, only major state changes
+  }, [tripActive, logs, selectedBus, routeType, allManifestStudents.length]); 
 
   // GPS WATCHER during active trip
   useEffect(() => {
@@ -398,7 +424,11 @@ export default function App() {
   }, []);
 
   const handleLogout = () => {
-    setIsAuthenticated(false);
+    // If MSAL used
+    if (isAuthenticated) {
+        instance.logoutPopup().catch(e => console.error(e));
+    }
+    setInternalAuth(false);
     setUserRole(UserRole.NONE);
     // Reset trip state
     setTripActive(false);
@@ -520,8 +550,11 @@ export default function App() {
       alert("Incident logged successfully.");
   };
 
-  if (!isAuthenticated) {
-    return <LoginScreen onLogin={() => setIsAuthenticated(true)} />;
+  // Determine if user is effectively logged in (either via MSAL or Simulation)
+  const isLoggedIn = isAuthenticated || internalAuth;
+
+  if (!isLoggedIn) {
+    return <LoginScreen onLogin={() => setInternalAuth(true)} />;
   }
 
   if (userRole === UserRole.NONE) {
@@ -531,7 +564,7 @@ export default function App() {
   if (userRole === UserRole.ADMIN) {
     return (
       <>
-        <Header user={{ name: "Admin" }} onLogout={handleLogout} />
+        <Header user={{ name: accounts[0]?.name || "Admin" }} onLogout={handleLogout} />
         <Dashboard />
       </>
     );
@@ -541,7 +574,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-gray-50 pb-20">
-      <Header user={{ name: "Driver" }} onLogout={handleLogout} />
+      <Header user={{ name: accounts[0]?.name || "Driver" }} onLogout={handleLogout} />
 
       {/* VIEW 1: BUS SELECTION */}
       {!selectedBus ? (
