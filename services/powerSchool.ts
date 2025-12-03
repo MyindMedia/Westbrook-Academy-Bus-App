@@ -1,6 +1,18 @@
 
 import { Student } from '../types';
 
+export interface PowerSchoolDiagnostics {
+    backendUp: boolean;
+    authenticated: boolean;
+    tokenExpired: boolean;
+    config?: {
+        baseUrl: string;
+        clientIdProvided: boolean;
+        redirectUri: string;
+    };
+    lastError?: string;
+}
+
 export class PowerSchoolService {
   private static instance: PowerSchoolService;
   private isConnected: boolean = false;
@@ -18,6 +30,32 @@ export class PowerSchoolService {
 
   public getCachedStudents(): Student[] {
       return this.cachedStudents;
+  }
+
+  // New diagnostic method
+  public async getDiagnostics(): Promise<PowerSchoolDiagnostics> {
+      try {
+          // Short timeout for diagnostics check to prevent UI hanging
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 2000); 
+
+          const response = await fetch('/api/powerschool/status', { signal: controller.signal });
+          clearTimeout(timeoutId);
+
+          if (response.ok) {
+              const data = await response.json();
+              return {
+                  backendUp: true,
+                  authenticated: data.authenticated,
+                  tokenExpired: data.tokenExpired,
+                  config: data.config
+              };
+          } else {
+              return { backendUp: true, authenticated: false, tokenExpired: false, lastError: `HTTP ${response.status}` };
+          }
+      } catch (e) {
+          return { backendUp: false, authenticated: false, tokenExpired: false, lastError: "Backend unreachable" };
+      }
   }
 
   public async syncStudents(): Promise<{ added: number, updated: number, students: Student[] }> {
@@ -40,18 +78,17 @@ export class PowerSchoolService {
                 students: realData 
             };
         } else {
-            console.error("Backend returned error:", response.statusText);
-            throw new Error("Backend connection failed");
+            const errorText = await response.text();
+            console.error("Backend returned error:", response.status, errorText);
+            throw new Error(response.status === 401 ? "NOT_AUTHENTICATED" : "API_ERROR");
         }
-    } catch (e) {
+    } catch (e: any) {
         console.error("PowerSchool Sync Failed:", e);
-        // STRICT: Return empty array. No mock data.
         this.isConnected = false;
-        return {
-            added: 0,
-            updated: 0,
-            students: []
-        };
+        
+        // Re-throw specific errors for UI handling
+        if (e.message === "NOT_AUTHENTICATED") throw e;
+        throw e;
     }
   }
 
